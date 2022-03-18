@@ -1,71 +1,95 @@
-const uploadFile = require("../middleware/upload");
-const fs = require("fs");
-const baseUrl = "http://localhost:8080/files/";
+
+const AWS = require("aws-sdk")
+const uploadFile = require("../middleware/upload")
+//const path = require('path')
+const fs = require('fs')
+const baseUrl = process.env.BASEURL;
+
 
 const upload = async (req, res) => {
-  try {
-    await uploadFile(req, res);
+    console.log("In upload function: " + req.file);
+    try {
+        await uploadFile(req, res);
 
-    if (req.file == undefined) {
-      return res.status(400).send({ message: "Please upload a file!" });
+        if (req.file === undefined) {
+            return res.status(400).send({message: "Please upload a file!"});
+        }
+
+        res.status(200).send({
+            message: "Uploaded the file successfully: " + req.file.originalname,
+        });
+    } catch (err) {
+        console.log(err);
+
+        res.status(500).send({
+            message: `Could not upload the file: ${req.file.originalname}. ${err}`,
+        });
     }
-
-    res.status(200).send({
-      message: "Uploaded the file successfully: " + req.file.originalname,
-    });
-  } catch (err) {
-    console.log(err);
-
-    if (err.code == "LIMIT_FILE_SIZE") {
-      return res.status(500).send({
-        message: "File size cannot be larger than 2MB!",
-      });
-    }
-
-    res.status(500).send({
-      message: `Could not upload the file: ${req.file.originalname}. ${err}`,
-    });
-  }
 };
+
 
 const getListFiles = (req, res) => {
-  const directoryPath = __basedir + "/resources/static/assets/uploads/";
+    let files = [];
+    // Create S3 service object
+    let s3 = new AWS.S3({apiVersion: '2006-03-01'});
 
-  fs.readdir(directoryPath, function (err, files) {
-    if (err) {
-      res.status(500).send({
-        message: "Unable to scan files!",
-      });
+    const params = {
+        Bucket: 'cvaas-user-documents',
+        Prefix: 'brad.taggart-ihsmarkit.com/imports'
     }
 
-    let fileInfos = [];
+    s3.listObjects(params, function (err, data) {
+        if (err) {
+            res.status(401).send({messageerror: "Could not get files"})
+        } else {
+            data['Contents'].forEach(item => {
+                let file = item['Key'].split('/').pop()
 
-    files.forEach((file) => {
-      fileInfos.push({
-        name: file,
-        url: baseUrl + file,
-      });
+                if (file.length > 0) {
+                    files.push({
+                        name: file,
+                        url: baseUrl + file
+                    });
+                }
+            })
+            //     console.log("Success", data.Key);
+            res.status(200).send(files);
+        }
     });
-
-    res.status(200).send(fileInfos);
-  });
-};
+}
 
 const download = (req, res) => {
-  const fileName = req.params.name;
-  const directoryPath = __basedir + "/resources/static/assets/uploads/";
+    const fileName = req.params.name;
+    console.log(fileName);
+    const tempFile = __basedir + "/resources/static/assets/uploads/" + fileName;
+    let s3 = new AWS.S3({apiVersion: '2006-03-01'});
 
-  res.download(directoryPath + fileName, fileName, (err) => {
-    if (err) {
-      res.status(500).send({
-        message: "Could not download the file. " + err,
-      });
+    const params = {
+        Bucket: 'cvaas-user-documents/brad.taggart-ihsmarkit.com/imports',
+        Key: fileName
     }
-  });
-};
 
+    return s3.getObject(params, (err, data) => {
+        if (err) console.error(err);
+        fs.writeFileSync(tempFile, data.Body);
+        res.download(tempFile, function (err) {
+            if (err) {
+                console.log(res.headersSent)
+            } else {
+                fs.unlink(tempFile, function (err) {
+                    if (err) {
+                        console.error(err);
+                    }
+                    console.log('Temp File Delete');
+                });
+            }
+        });
+
+    });
+}
 module.exports = {
-  upload,
-  getListFiles,
-  download,
+    upload,
+    getListFiles,
+    download,
+
 };

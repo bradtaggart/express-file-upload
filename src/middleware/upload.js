@@ -1,20 +1,21 @@
 const util = require("util");
 const multer = require("multer");
-const maxSize = 2 * 1024 * 1024;
+const multerS3 = require("multer-s3")
+const AWS = require("aws-sdk");
 
-let storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, __basedir + "/resources/static/assets/uploads/");
-  },
-  filename: (req, file, cb) => {
-    console.log(file.originalname);
-    cb(null, file.originalname);
-  },
+let s3 = new AWS.S3({apiVersion: '2006-03-01'});
+
+let storage = multerS3({
+    s3: s3,
+    bucket: 'cvaas-user-documents/brad.taggart-ihsmarkit.com/imports',
+    key: function (req, file, cb) {
+        console.log(file);
+        cb(null, file.originalname); //use Date.now() for unique file keys
+    }
 });
 
 let uploadFile = multer({
-  storage: storage,
-  limits: { fileSize: maxSize },
+    storage: storage
 }).single("file");
 
 let uploadFileMiddleware = util.promisify(uploadFile);

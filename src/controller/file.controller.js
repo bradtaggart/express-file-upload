@@ -1,76 +1,67 @@
-
 const AWS = require("aws-sdk")
 const uploadFile = require("../middleware/upload")
-//const path = require('path')
 const fs = require('fs')
-const baseUrl = process.env.BASEURL;
 
+let s3 = new AWS.S3();
+
+let params = {}
 
 const upload = async (req, res) => {
-    console.log("In upload function: " + req.file);
     try {
         await uploadFile(req, res);
-
-        if (req.file === undefined) {
+        if (req.file.originalname === undefined) {
             return res.status(400).send({message: "Please upload a file!"});
         }
-
         res.status(200).send({
-            message: "Uploaded the file successfully: " + req.file.originalname,
+            message: "Uploaded the file successfully: " + req.file.originalname
         });
     } catch (err) {
         console.log(err);
 
         res.status(500).send({
-            message: `Could not upload the file: ${req.file.originalname}. ${err}`,
+            message: `Could not upload the file: ${req.file.originalname}. ${err}`
         });
     }
 };
 
 
-const getListFiles = (req, res) => {
-    let files = [];
-    // Create S3 service object
-    let s3 = new AWS.S3({apiVersion: '2006-03-01'});
-
-    const params = {
-        Bucket: 'cvaas-user-documents',
-        Prefix: 'brad.taggart-ihsmarkit.com/imports'
+const getUserConfig = (req, res) => {
+    params = {
+        Bucket: req.params.s3Bucket + '/' + req.params.userKey,
+        Key: req.params.configKey
     }
-
-    s3.listObjects(params, function (err, data) {
+    return s3.getObject(params, (err, data) => {
         if (err) {
-            res.status(401).send({messageerror: "Could not get files"})
-        } else {
-            data['Contents'].forEach(item => {
-                let file = item['Key'].split('/').pop()
-
-                if (file.length > 0) {
-                    files.push({
-                        name: file,
-                        url: baseUrl + file
-                    });
-                }
-            })
-            //     console.log("Success", data.Key);
-            res.status(200).send(files);
+            console.error(err);
+            return err
         }
+        res.status(200).send(data.Body.toString())
     });
 }
 
-const download = (req, res) => {
-    const fileName = req.params.name;
-    console.log(fileName);
-    const tempFile = __basedir + "/resources/static/assets/uploads/" + fileName;
-    let s3 = new AWS.S3({apiVersion: '2006-03-01'});
-
-    const params = {
-        Bucket: 'cvaas-user-documents/brad.taggart-ihsmarkit.com/imports',
-        Key: fileName
+const getFile = async (req, res) => {
+    params = {
+        Bucket: req.params.s3Bucket + '/' + req.params.userKey + '/' + req.params.prefix,
+        Key: req.params.file
     }
+    return s3.getObject(params, (err, data) => {
+        if (err) {
+            console.error(err);
+            return err
+        }
+        res.status(200).send(data.Body)
+    });
+};
+
+const download = (req, res) => {
+    const params = {
+        Bucket: req.params.s3Bucket + '/' + req.params.userKey +  '/' + req.params.prefix,
+        Key: req.params.file
+    }
+    const tempFile = __basedir + "/resources/static/assets/uploads/" + req.params.file;
 
     return s3.getObject(params, (err, data) => {
-        if (err) console.error(err);
+        if (err) console.error('GetObject: ' + err);
         fs.writeFileSync(tempFile, data.Body);
         res.download(tempFile, function (err) {
             if (err) {
@@ -80,16 +71,29 @@ const download = (req, res) => {
                     if (err) {
                         console.error(err);
                     }
-                    console.log('Temp File Delete');
                 });
             }
         });
+    });
+};
 
+const deleteFile = (req, res) => {
+    const params = {
+        Bucket: req.params.s3Bucket + '/' + req.params.userKey + '/' + req.params.prefix,
+        Key: req.params.file
+    }
+    s3.deleteObject(params, (err, data) => {
+        if (err) {
+            return res.status(400).send(err);
+        }
+        res.status(200).send(data);
     });
 }
+
 module.exports = {
     upload,
-    getListFiles,
+    getFile,
     download,
-
+    deleteFile,
+    getUserConfig,
 };

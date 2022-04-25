@@ -5,9 +5,13 @@ require("./src/s3config")
 const app = express();
 
 
+let bodyParser = require('body-parser');
+app.use(bodyParser.json());
+app.use(express.urlencoded({ extended: true }));
+//app.use(express.json())
 global.__basedir = __dirname;
 
-var corsOptions = {
+const corsOptions = {
   origin: "http://localhost:4200"
 };
 

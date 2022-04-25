@@ -7,10 +7,14 @@ let s3 = new AWS.S3({apiVersion: '2006-03-01'});
 
 let storage = multerS3({
     s3: s3,
-    bucket: 'cvaas-user-documents/brad.taggart-ihsmarkit.com/imports',
+ //   bucket: 'cvaas-user-documents/brad.taggart-ihsmarkit.com/imports',
+    bucket:  function(req, file, cb) {
+        let bucket = req.body.bucket
+        console.log(bucket)
+        cb(null, bucket)
+    },
     key: function (req, file, cb) {
-        console.log(file);
-        cb(null, file.originalname); //use Date.now() for unique file keys
+        cb(null, file.originalname);
     }
 });
 
